@@ -11,21 +11,22 @@ class DeltaDataset():
         self.__setup_variables()
         self.delta_client = RetrieveDeltaData()
 
-        self.build()
 
-    
     def build(self):
-        self.move_df = self.__get_move_data(self.start_time, self.end_time)
+        # self.move_df = self.__get_move_data(self.start_time, self.end_time)
         self.futures_df = self.__get_future_data(self.start_time, self.end_time)
-        return
+        self.move_df = self.__get_move_data(self.start_time, self.end_time)
 
-
+        self.futures_df.to_csv("futures.csv")
+        self.move_df.to_csv("move.csv")
 
 
     def __setup_variables(self):
         self.start_time = '2022-12-25'
-        self.end_time = '2022-12-31'
-        self.end_time = '2023-01-04'
+        # self.end_time = '2022-12-31'
+
+        # self.start_time = '2023-01-04'
+        self.end_time = '2023-01-05'
         self.period = "5m"
 
 

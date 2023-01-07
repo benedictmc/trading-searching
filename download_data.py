@@ -62,102 +62,100 @@ class RetrieveDeltaData():
         
         print("Getting results from DB..")
         # Returns documents from DB
+        # for i in collection.find(period_query, sort=[("time", 1)]):
+        #     print(i)
         return [_ for _ in collection.find(period_query, sort=[("time", 1)])]
 
 
     def get_delta_move_data(self, period: str, start_time: int, end_time: int, symbol: str) -> list:
         collection = self.db[f"move_data"]
-        period_query = {
+        all_period_query = {
             "time" : {
                 "$gte": start_time,
                 "$lt": end_time
             }
         }
 
-        # Gets amount of results from DB and compares to expected
-        document_count = collection.count_documents(period_query)
+        if start_time > end_time:
+            print("Start time is greater than end time")
+            return 
 
-        if document_count != 0:
-            print("Doing something")
-            move_data = [_ for _ in collection.find(filter=period_query, sort=[("time", 1)])]
-            # print(start_time+43200, end_time)
+        days_to_iterate = int(end_time/86400) - int(start_time/86400)
+        move_timestamp = start_time
+        move_list = []
 
-            # print(pd.to_datetime(start_time+43200, unit="s"))
-            print(f"Start time in DB: {pd.to_datetime(move_data[0]['time'], unit='s')}")
-            print(f"Start_time+43200 in Function: { pd.to_datetime(start_time+43200, unit='s') }")
-            print(f"End time in DB: {pd.to_datetime(move_data[-1]['time'], unit='s')}")
-            print(f"end_time in Function: { pd.to_datetime(end_time, unit='s') }")
+        for day in range(0, days_to_iterate):
+            date = datetime.utcfromtimestamp(move_timestamp).strftime('%d%m%y')
+            move_start_ts = move_timestamp - 43200
+            move_end_ts = move_start_ts + 86400
 
-            if end_time > move_data[-1]['time']:
-                print("Downlaod more end data")
-                start_time = move_data[-1]['time']
-                print(f"New start time in Function: { pd.to_datetime(start_time, unit='s') }")
-                print(f"end_time in Function: { pd.to_datetime(end_time, unit='s') }")
-            elif start_time < move_data[0]['time']:
-                print("Downlaod more start data. NOT DONE")
-                exit()
+            period_query = {
+                "time" : {
+                    "$gte": move_start_ts,
+                    "$lt": move_end_ts
+                }
+            }
+            document_count = collection.count_documents(period_query)
+
+            if document_count > 0 and document_count != 288:
+                print(f"Document count for day is incomplete. Documents {document_count}")
+                api_result, strike_price = self.__create_move_query(date, move_start_ts, move_end_ts, symbol)
+                add_results = []
+
+                for _ in api_result:
+                    _.update({"_id":_["time"], "strike_price": strike_price})
+                    add_results.append(_)
+
+                try:
+                    collection.insert_many(add_results, ordered=False)
+                except Exception as e:
+                    print(e)
+                    print(f"Insertion error documents inserted")
             else:
-                return move_data
+                print(f"All documents in DB for {date}. Retrieving....")
 
-        asset = symbol
-        initial_start_time = start_time+43200
-        end_date = datetime.utcfromtimestamp(end_time).strftime('%d%m%y')
-        move_data = []
-        start_strike_price = 16800
+            move_timestamp += 86400
 
-        while True:
-            end_date = datetime.utcfromtimestamp(end_time).strftime('%d%m%y')
-            start_time = int(time.mktime(datetime.strptime(end_date, "%d%m%y").timetuple()))-43200
-            end_time = start_time+86400
 
-            print(initial_start_time, start_time)
-            if start_time <= initial_start_time:
-                print("Breaking. Saving data....")
+        move_list.extend([_ for _ in collection.find(filter=all_period_query, sort=[("time", 1)])])
 
+        return move_list
+        # print(len(move_list))
+
+
+
+
+    def __create_move_query(self, date, move_start_ts, move_end_ts, asset):
+        period = "5m"
+
+        strike_price = 16800
+
+        for i in range(10):
+            upper_strike_price = strike_price + (i*100)
+            lower_strike_price = strike_price - (i*100)
+
+            upper_symbol = f"MV-{asset}-{upper_strike_price}-{date}"
+            upper_api_result = self.__get_future_api_data(period, move_start_ts, move_end_ts, upper_symbol)
+
+            if len(upper_api_result["result"]) != 0:
+                strike_price = upper_strike_price
+                api_result = upper_api_result
                 break
-
-            for i in range(10):
-                upper_strike_price = start_strike_price + (i*100)
-                lower_strike_price = start_strike_price - (i*100)
-
-                upper_symbol = f"MV-{asset}-{upper_strike_price}-{end_date}"
-                upper_api_result = self.__get_future_api_data(period, start_time, end_time, upper_symbol)
-
-                if len(upper_api_result["result"]) != 0:
-                    start_strike_price = upper_strike_price
-                    api_result = upper_api_result
-                    break
-                
-                lower_symbol = f"MV-{asset}-{lower_strike_price}-{end_date}"
-                lower_api_result = self.__get_future_api_data(period, start_time, end_time, lower_symbol)
-
-                if len(lower_api_result["result"]) != 0:
-                    start_strike_price = lower_strike_price
-                    api_result = lower_api_result
-                    break
-       
-                if i == 9:
-                    print(f"Strike price not found for {end_date}")
-                    exit()
-
             
-            for _ in api_result["result"]:
-                _.update({"_id":_["time"], "strike_price": start_strike_price})
-                move_data.append(_)
+            lower_symbol = f"MV-{asset}-{lower_strike_price}-{date}"
+            lower_api_result = self.__get_future_api_data(period, move_start_ts, move_end_ts, lower_symbol)
 
-            end_time = end_time - 86400
+            if len(lower_api_result["result"]) != 0:
+                strike_price = lower_strike_price
+                api_result = lower_api_result
+                break
+    
+            if i == 9:
+                print(f"Strike price not found for {date}")
+                exit()
 
-        try:
-            collection.insert_many(move_data, ordered=False)
-        except Exception as e:
-            print(e)
-            print(f"Insertion error documents inserted")
-
-        return [_ for _ in collection.find(filter=period_query, sort=[("time", 1)])]
-        
-
-
-
+        return api_result["result"], strike_price
+    
 
     def __get_future_api_data(self, period: str, start_time: int, end_time: int, symbol: str) -> dict:
         self.api_url = "history/candles"
@@ -169,3 +167,5 @@ class RetrieveDeltaData():
             print("Error")
 
         return response.json()
+
+# RetrieveDeltaData().get_delta_move_data("5m", 1672358400, 1672358400+86400, "BTC")
