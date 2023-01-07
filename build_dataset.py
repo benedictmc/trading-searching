@@ -11,11 +11,14 @@ class DeltaDataset():
         self.__setup_variables()
         self.delta_client = RetrieveDeltaData()
 
-        # Figure out how to do 5 minutes
-        # self.df = self.__get_future_data(self.start_time, self.end_time)
+        self.build()
+
+    
+    def build(self):
         self.move_df = self.__get_move_data(self.start_time, self.end_time)
         self.futures_df = self.__get_future_data(self.start_time, self.end_time)
-        # print(self.df.head())
+        return
+
 
 
 

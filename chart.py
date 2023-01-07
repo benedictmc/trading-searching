@@ -20,9 +20,10 @@ def chart_Ohlc_data(df, move=None):
 
     # m
 
+dataset = DeltaDataset().build()
 
-futures_df = DeltaDataset().futures_df
-move_df = DeltaDataset().move_df
+futures_df = dataset.futures_df
+move_df = dataset.move_df
 
 
 
