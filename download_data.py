@@ -5,6 +5,11 @@ import time
 from dotenv import load_dotenv
 import os
 import pandas as pd
+import asyncio
+import websockets
+import json
+from collections import deque 
+
 
 load_dotenv()
 
@@ -120,9 +125,6 @@ class RetrieveDeltaData():
         move_list.extend([_ for _ in collection.find(filter=all_period_query, sort=[("time", 1)])])
 
         return move_list
-        # print(len(move_list))
-
-
 
 
     def __create_move_query(self, date, move_start_ts, move_end_ts, asset):
@@ -168,4 +170,56 @@ class RetrieveDeltaData():
 
         return response.json()
 
-# RetrieveDeltaData().get_delta_move_data("5m", 1672358400, 1672358400+86400, "BTC")
+
+    def delta_websocket(self):
+        self.message_list = deque([])
+        collection = self.db[f"ws_move_data"]
+        self.first_message = True
+
+        async def receive_messages(websocket):
+            
+
+            while True:
+                message = await websocket.recv()
+                if self.first_message:
+                    self.first_message = False
+                    continue
+
+                ts = int(time.time())
+                if message:
+                    message = json.loads(message)
+                    message.update({"_id": message["timestamp"]})
+                    self.message_list.appendleft(message)
+                    
+                if ts%60 == 0 and len(self.message_list) > 0:
+                    print("Adding messages and emptying queue..")
+                    collection.insert_many(self.message_list, ordered=False)
+                    self.message_list = deque([])
+
+                
+        async def subscribe(websocket, channel):
+            subscription_request = {
+                "type": "subscribe",
+                "payload": {
+                    "channels": [
+                        {
+                            "name": "mark_price",
+                            "symbols": [
+                                "MARK:MV-BTC-16900-090123"
+                            ]
+                        }, 
+                    ]
+                }
+            }
+            await websocket.send(json.dumps(subscription_request))
+
+        async def run_client():
+            async with websockets.connect("wss://socket.delta.exchange") as websocket:
+                await subscribe(websocket, "my_channel")
+                await receive_messages(websocket)
+
+        asyncio.get_event_loop().run_until_complete(run_client())
+
+
+
+RetrieveDeltaData().delta_websocket()
