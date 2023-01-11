@@ -2,30 +2,43 @@ import mplfinance as mpf
 from build_dataset import DeltaDataset
 import pandas as pd
 import time
-# import matplotlib.pyplot as plt
-# plt.switch_backend('agg')
+
 
 def chart_Ohlc_data(df, move=None):
-    # ts = int(time.time())
-    # s = mpf.make_mpf_style(base_mpf_style='charles', rc={'font.size': 6})
-    # print(move['close'])
-    # ap = mpf.make_addplot(move['close'],color='g',panel=2),  # panel 2 specified
-    # df = df.assign(move_close=move['close'])
-    print(df.head())
-    if move and not move.empty:
-        ap2 = [
-            mpf.make_addplot(move['close'],color='b',panel=1),  # panel 2 specified
-        ]
-        mpf.plot(df,type='candle',main_panel=0,addplot=ap2)
-    else:
-        mpf.plot(df,type='candle')
+    # if move and not move.empty:
+    ap2 = [
+        mpf.make_addplot(df['_'],color='b',panel=1),  # panel 2 specified
+        mpf.make_addplot(df['close_futures'],color='b',panel=2),  # panel 2 specified
+
+        # mpf.make_addplot(df[''],color='g',panel=1), 
+    ]
+    mpf.plot(df,type='candle',main_panel=0,addplot=ap2)
+
+    # if not df.empty:
+    #     mpf.plot(df,type='candle')
 
 
-    # m
 
-dataset = DeltaDataset()
+
+# for i in range(1, 30):
+#     start_date =f'2022-11-{i}'
+#     end_date =f'2022-11-{i+1}'
+
+#     dataset = DeltaDataset(start_date=start_date, end_date=end_date)
+#     dataset.build()
+#     move_df = dataset.move_df
+#     chart_Ohlc_data(move_df)
+
+dataset = DeltaDataset(start_date='2023-01-07', end_date='2023-01-08')
 dataset.build()
-futures_df = dataset.futures_df
-move_df = dataset.move_df
-chart_Ohlc_data(move_df)
-# chart_Ohlc_data(futures_df, move_df)
+df = dataset.df
+
+trades_df = pd.read_csv("BTCUSDT-trades-2023-01-06_5m.csv", index_col=0)
+trades_df.index = pd.to_datetime(trades_df.index)
+
+df = df.merge(trades_df, left_index=True, right_index=True, how='inner')
+
+print(df.head())
+chart_Ohlc_data(df)
+
+# Getting data for Delta with request: https://api.delta.exchange/v2/history/candles?resolution=5m&start=1000000000&end=4000000000&symbol=MV-BTC-23400-111122

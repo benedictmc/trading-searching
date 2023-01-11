@@ -23,6 +23,8 @@ class RetrieveDeltaData():
         self.period_map = {
             "5m" : 300
         }
+        self.move_skip_date = ["161222", "021222", "041122", "111122", "181122"]
+        self.strike_price = 17300
 
 
     def get_delta_data(self, period: str, start_time: int, end_time: int, symbol: str) -> list:
@@ -74,12 +76,7 @@ class RetrieveDeltaData():
 
     def get_delta_move_data(self, period: str, start_time: int, end_time: int, symbol: str) -> list:
         collection = self.db[f"move_data"]
-        all_period_query = {
-            "time" : {
-                "$gte": start_time,
-                "$lt": end_time
-            }
-        }
+        date_list = []
 
         if start_time > end_time:
             print("Start time is greater than end time")
@@ -87,28 +84,38 @@ class RetrieveDeltaData():
 
         days_to_iterate = int(end_time/86400) - int(start_time/86400)
         move_timestamp = start_time
+        move_start_ts = 1000000000
+        move_end_ts = 4000000000
+
         move_list = []
 
-        for day in range(0, days_to_iterate):
+        for _ in range(0, days_to_iterate):
             date = datetime.utcfromtimestamp(move_timestamp).strftime('%d%m%y')
-            move_start_ts = move_timestamp - 43200
-            move_end_ts = move_start_ts + 86400
+            date_list.append(date)
+
+            if date in self.move_skip_date:
+                print(f"> *********")
+                print(f"> The date {date} has no data. Skipping....")
+                print(f"> *********")
+                move_timestamp += 86400
+                continue
 
             period_query = {
-                "time" : {
-                    "$gte": move_start_ts,
-                    "$lt": move_end_ts
-                }
+                "date" : date
             }
             document_count = collection.count_documents(period_query)
 
-            if document_count > 0 and document_count != 288:
+            if document_count not in [286, 287, 288]:
                 print(f"Document count for day is incomplete. Documents {document_count}")
                 api_result, strike_price = self.__create_move_query(date, move_start_ts, move_end_ts, symbol)
+                print(f"Amount of results return from API {len(api_result)}")
+
+                # Remove last result becuase there will be duplicate
+                api_result.pop()
                 add_results = []
 
                 for _ in api_result:
-                    _.update({"_id":_["time"], "strike_price": strike_price})
+                    _.update({"_id":_["time"], "strike_price": strike_price, "date": date})
                     add_results.append(_)
 
                 try:
@@ -121,26 +128,30 @@ class RetrieveDeltaData():
 
             move_timestamp += 86400
 
+        all_period_query = {
+            "date" : {
+                "$in": date_list
+            }
+        }
 
         move_list.extend([_ for _ in collection.find(filter=all_period_query, sort=[("time", 1)])])
-
         return move_list
 
 
     def __create_move_query(self, date, move_start_ts, move_end_ts, asset):
         period = "5m"
 
-        strike_price = 16800
+        api_result = False
 
-        for i in range(10):
-            upper_strike_price = strike_price + (i*100)
-            lower_strike_price = strike_price - (i*100)
+        for i in range(50):
+            upper_strike_price = self.strike_price + (i*100)
+            lower_strike_price = self.strike_price - (i*100)
 
             upper_symbol = f"MV-{asset}-{upper_strike_price}-{date}"
             upper_api_result = self.__get_future_api_data(period, move_start_ts, move_end_ts, upper_symbol)
 
             if len(upper_api_result["result"]) != 0:
-                strike_price = upper_strike_price
+                self.strike_price = upper_strike_price
                 api_result = upper_api_result
                 break
             
@@ -148,15 +159,15 @@ class RetrieveDeltaData():
             lower_api_result = self.__get_future_api_data(period, move_start_ts, move_end_ts, lower_symbol)
 
             if len(lower_api_result["result"]) != 0:
-                strike_price = lower_strike_price
+                self.strike_price = lower_strike_price
                 api_result = lower_api_result
                 break
-    
-            if i == 9:
-                print(f"Strike price not found for {date}")
-                exit()
+        
+        if not api_result:
+            print(f"Strike price not found for {date}")
+            return [], 0
 
-        return api_result["result"], strike_price
+        return api_result["result"], self.strike_price
     
 
     def __get_future_api_data(self, period: str, start_time: int, end_time: int, symbol: str) -> dict:
@@ -222,4 +233,4 @@ class RetrieveDeltaData():
 
 
 
-RetrieveDeltaData().delta_websocket()
+# RetrieveDeltaData().delta_websocket()
