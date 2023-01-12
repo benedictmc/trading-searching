@@ -2,6 +2,7 @@ import mplfinance as mpf
 from build_dataset import DeltaDataset
 import pandas as pd
 import time
+from sklearn.preprocessing import MinMaxScaler
 
 
 def chart_Ohlc_data(df, move=None):
@@ -14,20 +15,6 @@ def chart_Ohlc_data(df, move=None):
     ]
     mpf.plot(df,type='candle',main_panel=0,addplot=ap2)
 
-    # if not df.empty:
-    #     mpf.plot(df,type='candle')
-
-
-
-
-# for i in range(1, 30):
-#     start_date =f'2022-11-{i}'
-#     end_date =f'2022-11-{i+1}'
-
-#     dataset = DeltaDataset(start_date=start_date, end_date=end_date)
-#     dataset.build()
-#     move_df = dataset.move_df
-#     chart_Ohlc_data(move_df)
 
 dataset = DeltaDataset(start_date='2023-01-07', end_date='2023-01-08')
 dataset.build()
@@ -38,7 +25,17 @@ trades_df.index = pd.to_datetime(trades_df.index)
 
 df = df.merge(trades_df, left_index=True, right_index=True, how='inner')
 
+scaler = MinMaxScaler()
+df["_"] = scaler.fit_transform(df["_"].values.reshape(-1, 1))
+
+# normalized_income = pd.DataFrame(normalized_income, columns=['Normalized Income'])
+
+
+# Create a StandardScaler object
+
+
 print(df.head())
 chart_Ohlc_data(df)
+df.to_csv("test.csv")
 
 # Getting data for Delta with request: https://api.delta.exchange/v2/history/candles?resolution=5m&start=1000000000&end=4000000000&symbol=MV-BTC-23400-111122
