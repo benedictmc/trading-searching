@@ -1,7 +1,6 @@
 import pandas as pd
 from datetime import datetime
 from download_data import RetrieveDeltaData
-import numpy as np
 
 class DeltaDataset():
 
