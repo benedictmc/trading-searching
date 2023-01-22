@@ -2,13 +2,13 @@ import json
 import os
 import pandas as pd
 from retrieve_mexc_data import MexcAPIClient
-
+from chart_rebalance import chart_ohlc_data
+import numpy as np
 
 class RebalanceAnalysis():
 
     def __init__(self):
         self.mexc_client = MexcAPIClient()
-
         self.find_15_percent_change()
 
 
@@ -53,61 +53,71 @@ class RebalanceAnalysis():
 
         for key, value in amnormal_rebalance_dict.items():
             coin_pair = key.split("_")[0].replace("3S","").replace("3L","")
+            rebal_dt = pd.to_datetime(value['rebal_time'], unit='s').floor("min")
+
+
             print("=====================================")
             print(f"Checking {coin_pair}")
             print(f"The time of the amnormal rebalance was: {pd.to_datetime(value['rebal_time'], unit='s')}")
             print(f"The time of the previous rebalance was: {pd.to_datetime(value['last_rebal_time'], unit='s')}")
 
+            last_rebal_ms = value["last_rebal_time"]*1000
+            # last_rebal_ms plus one day
+            next_rebal_ms = last_rebal_ms + 86400000
 
-            res = self.mexc_client.get_kline_data(f"{coin_pair}USDT", "1m", value["last_rebal_time"]*1000, value["rebal_time"]*1000)
+            res = self.mexc_client.get_kline_data(f"{coin_pair}USDT", "1m", last_rebal_ms, next_rebal_ms)
+
             if type(res) == dict:
                 continue
+
             rebalance_price = float(res[0][1])
             max_pct_change = 0
 
-            count = 0
+            ohlc_data, rebalance_signal, fifteen_signal = [], [], []
+            added_15 = False
+
             for ohlc in res:
-                new_price = float(ohlc[1])
-                pct_change = (new_price - rebalance_price)/rebalance_price
+                ohlc_dt = pd.to_datetime(ohlc[0], unit='ms')
+                ohlc_dict = {"ts": ohlc[0], "open": float(ohlc[1]), "high": float(ohlc[2]), "low": float(ohlc[3]), "close": float(ohlc[4])}
+                ohlc_data.append(ohlc_dict)
+
+                if ohlc_dt == rebal_dt:
+                    rebalance_signal.append(ohlc_dict["open"])
+                else:
+                    rebalance_signal.append(np.nan)
+
+                pct_change = (ohlc_dict["open"] - rebalance_price)/rebalance_price
                 
                 if pct_change > 0.15:
-                    print(f">  15% Change at {pd.to_datetime(ohlc[0], unit='ms')}")
-                    print(f"> Rebalance price: {rebalance_price}")
-                    print(f"> New price: {new_price}")
-                    count += 1
+                    added_15 = True
+                    print("Adding 15% marker")
+                    fifteen_signal.append(ohlc_dict["open"])
+                else:
+                    fifteen_signal.append(np.nan)
 
-                if count == 5:
-                    break
+            df = pd.DataFrame(ohlc_data)
+            df.set_index("ts", inplace=True)
+            df.index = pd.to_datetime(df.index, unit="ms")
 
-
-                max_pct_change = max(max_pct_change, pct_change)
-
-
-            # print(res)
+            df["rebalance_marker"] = rebalance_signal
+            df["fifteen_marker"] = fifteen_signal
+            
+            if not added_15:
+                continue
+                
+            chart_ohlc_data(df, df.rebalance_marker.values, df.fifteen_marker.values)
             # exit()
 
-            # try:
-            #     print(f"Checking {symbol}")
-            #     
-            #     max_pct_change = 0
 
-            #     if "data" in res and len(res["data"]) == 0:
-            #         continue
+# 0	Open time
+# 1	Open
+# 2	High
+# 3	Low
+# 4	Close
+# 5	Volume
+# 6	Close time
+# 7	Quote asset volume
 
-            #     start_price = float(res["data"][0][1])
-            #     # print("Start price: ", start_price)
-
-            #     for i in res["data"]:
-            #         new_price = float(i[2])
-            #         pct_change = (new_price - start_price)/start_price
-            #         if pct_change > 0.15:
-            #             print(f">  15% Change at {i[0]}")
-            #         max_pct_change = max(max_pct_change, pct_change)
-
-            #     # print("Max pct change: ", max_pct_change)
-            # except:
-            #     print(res)
-            #     print("Error")
 
     
 

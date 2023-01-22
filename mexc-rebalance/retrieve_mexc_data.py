@@ -87,26 +87,21 @@ class MexcAPIClient():
 
 
     def get_mexc_rebalances(self):
+        for symbol in self.symbols:
+            symbol = f"{symbol.split('_')[0]}3S"
+            url = f"https://www.mexc.co/api/platform/spot/market/etf/rebalance/list?coinName={symbol}&pageNum=1&pageSize=1000"
+            print(f"Getting {url} ... ")
+            response = requests.get(url)
 
-        with open("data/symbols.json", "r") as f:
-            symbols = json.load(f)
+            if response.status_code == 200:
+                with open(f"data/rebalance_{symbol}.json", "w") as f:
+                    json.dump(response.json(), f, indent=4)
 
-        for symbol in symbols["pageProps"]["spotMarkets"]["USDT"]:
-            if "3S" in symbol["currency"] or "3L" in symbol["currency"]:
-                coin_name = symbol["currency"]
-                url = f"https://www.mexc.co/api/platform/spot/market/etf/rebalance/list?coinName={coin_name}&pageNum=1&pageSize=1000"
-                print(f"Getting {url} ... ")
-                response = requests.get(url)
-
-                if response.status_code == 200:
-                    with open(f"data/rebalance_{coin_name}.json", "w") as f:
-                        json.dump(response.json(), f, indent=4)
-
-                time.sleep(1)
+            time.sleep(1)
 
 
 
-# res = MexcAPIClient()
+# MexcAPIClient().get_mexc_rebalances()
 
 
 
