@@ -7,6 +7,8 @@ import json
 import threading
 import websocket
 import pandas as pd
+import requests
+
 
 load_dotenv("../.env")
 
@@ -71,6 +73,49 @@ class MexcWSClient():
 
             
 
+class MexcAPIClient():
+
+    def __init__(self):
+        self.symbols = ["OSMO_USDT","ZIL_USDT","MAGIC_USDT","TON_USDT","BNX_USDT","LIT_USDT","SWEAT_USDT","LDO_USDT","XLM_USDT","BEL_USDT","ICP_USDT","SRM_USDT","DEGO_USDT","REN_USDT","DASH_USDT","THETA_USDT","MTL_USDT","AUDIO_USDT","ZRX_USDT","LTC_USDT","BONK_USDT","ANT_USDT","FLR_USDT","ETHW_USDT","QTUM_USDT","BCH_USDT","SUSHI_USDT","ENJ_USDT","ADA_USDT","XEC_USDT","SNX_USDT","TRB_USDT","ONT_USDT","ZEC_USDT","FOOTBALL_USDT","SXP_USDT","GMX_USDT","RACA_USDT","CRV_USDT","ALPINE_USDT","CREAM_USDT","MASK_USDT","RLC_USDT","GRT_USDT","CTK_USDT","CEL_USDT","IOTA_USDT","PEOPLE_USDT","ALPHA_USDT","YFI_USDT","SAND_USDT","ANKR_USDT","LRC_USDT","UNFI_USDT","DOT_USDT","BAKE_USDT","UNI_USDT","CRO_USDT","APE_USDT","EGLD_USDT","MINA_USDT","IMX_USDT","XMR_USDT","FITFI_USDT","PSG_USDT","DEFI_USDT","AGLD_USDT","CELR_USDT","XTZ_USDT","AXS_USDT","IOTX_USDT","ETC_USDT","STMX_USDT","SANTOS_USDT","APT_USDT","XRP_USDT","FLM_USDT","DUSK_USDT","STG_USDT","OMG_USDT","FILECOIN_USDT","BIT_USDT","WAVES_USDT","TRX_USDT","ARPA_USDT","BONE_USDT","DC_USDT","OGN_USDT","GALA_USDT","GTC_USDT","TOMO_USDT","OCEAN_USDT","KLAY_USDT","CVC_USDT","DOGE_USDT","SKL_USDT","RVN_USDT","CSPR_USDT","LOOKS_USDT","SHIB_USDT","ICX_USDT","C98_USDT","LUNC_USDT","DGB_USDT","PORTO_USDT","HNT_USDT","NEAR_USDT","NEO_USDT","CELO_USDT","BAT_USDT","ALICE_USDT","COMP_USDT","BSV_USDT","CVX_USDT","DENT_USDT","SNFT_USDT","KAVA_USDT","IOST_USDT","SLP_USDT","COTI_USDT","BTS_USDT","GLMR_USDT","AVAX_USDT","RUNE_USDT","DAR_USDT","SPELL_USDT","KSM_USDT","JASMY_USDT","MKR_USDT","CTSI_USDT","FLOW_USDT","CHZ_USDT","DYDX_USDT","RSR_USDT","CHR_USDT","ACH_USDT","AAVE_USDT","ONE_USDT","FTM_USDT","ROSE_USDT","PERP_USDT","ANC_USDT","GAL_USDT","EOS_USDT","H3RO_USDT","OP_USDT","STORJ_USDT","REEF_USDT","ALGO_USDT","STEPN_USDT","LAZIO_USDT","MATIC_USDT","LINA_USDT","WOO_USDT","ENS_USDT","VINU_USDT","MANA_USDT","RAY_USDT","LINK_USDT","KNC_USDT","BLZ_USDT","YFII_USDT","NKN_USDT","LUNA_USDT","QNT_USDT","XEM_USDT","HT_USDT","ZEN_USDT","BAL_USDT","1INCH_USDT","SFP_USDT"]
 
 
-MexcWSClient()
+    def get_kline_data(self, symbol, interval, start_time, end_time):
+        url = f"https://api.mexc.com/api/v3/klines?symbol={symbol}&interval={interval}&startTime={start_time}&endTime={end_time}&limit=1000"
+        print(url)
+        response = requests.get(url)
+        return response.json()
+
+
+    def get_mexc_rebalances(self):
+
+        with open("data/symbols.json", "r") as f:
+            symbols = json.load(f)
+
+        for symbol in symbols["pageProps"]["spotMarkets"]["USDT"]:
+            if "3S" in symbol["currency"] or "3L" in symbol["currency"]:
+                coin_name = symbol["currency"]
+                url = f"https://www.mexc.co/api/platform/spot/market/etf/rebalance/list?coinName={coin_name}&pageNum=1&pageSize=1000"
+                print(f"Getting {url} ... ")
+                response = requests.get(url)
+
+                if response.status_code == 200:
+                    with open(f"data/rebalance_{coin_name}.json", "w") as f:
+                        json.dump(response.json(), f, indent=4)
+
+                time.sleep(1)
+
+
+
+# res = MexcAPIClient()
+
+
+
+# 0	Open time
+# 1	Open
+# 2	High
+# 3	Low
+# 4	Close
+# 5	Volume
+# 6	Close time
+# 7	Quote asset volume
+
