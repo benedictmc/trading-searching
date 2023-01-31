@@ -11,7 +11,7 @@ import json
 from collections import deque 
 
 
-load_dotenv()
+load_dotenv("../.env")
 
 class RetrieveDeltaData():
 

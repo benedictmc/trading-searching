@@ -7,18 +7,22 @@ from sklearn.preprocessing import MinMaxScaler
 
 def chart_Ohlc_data(df, move=None):
     # if move and not move.empty:
-    ap2 = [
-        mpf.make_addplot(df['_'],color='b',panel=1),  # panel 2 specified
-        mpf.make_addplot(df['close_futures'],color='b',panel=2),  # panel 2 specified
+    # ap2 = [
+    #     mpf.make_addplot(df['_'],color='b',panel=1),  # panel 2 specified
+    #     mpf.make_addplot(df['close_futures'],color='b',panel=2),  # panel 2 specified
 
-        # mpf.make_addplot(df[''],color='g',panel=1), 
-    ]
-    mpf.plot(df,type='candle',main_panel=0,addplot=ap2)
+    #     # mpf.make_addplot(df[''],color='g',panel=1), 
+    # ]
+    # mpf.plot(df,type='candle', main_panel=0, addplot=ap2)
+
+    mpf.plot(df,type='candle', main_panel=0)
 
 
-dataset = DeltaDataset(start_date='2023-01-01', end_date='2023-01-21')
+dataset = DeltaDataset(start_date='2023-01-01', end_date='2023-01-20')
 dataset.build()
 df = dataset.df
+print(df.head())
+# exit()
 
 # trades_df = pd.read_csv("BTCUSDT-trades-2023-01-06_5m.csv", index_col=0)
 # trades_df.index = pd.to_datetime(trades_df.index)
@@ -36,6 +40,5 @@ df = dataset.df
 
 # print(df.head())
 chart_Ohlc_data(df)
-df.to_csv("test.csv")
 
 # Getting data for Delta with request: https://api.delta.exchange/v2/history/candles?resolution=5m&start=1000000000&end=4000000000&symbol=MV-BTC-23400-111122
