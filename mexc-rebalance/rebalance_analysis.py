@@ -9,7 +9,7 @@ class RebalanceAnalysis():
 
     def __init__(self):
         self.mexc_client = MexcAPIClient()
-        self.find_15_percent_change()
+        # self.find_15_percent_change()
 
 
     def get_amnormal_rebalance_times(self):
@@ -119,6 +119,18 @@ class RebalanceAnalysis():
 # 7	Quote asset volume
 
 
-    
+rebalance_analysis = RebalanceAnalysis()
 
-RebalanceAnalysis()
+symbols = rebalance_analysis.mexc_client.symbols
+
+for symbol in symbols:
+    symbol = symbol.replace("_", "")
+    # 01/01/2023 00:00:00 to timestamp
+    start_ts =  1672531200000
+
+    # 31/01/2023 00:00:00 to timestamp
+    end_ts = 1675203405000
+
+    res = rebalance_analysis.mexc_client.get_kline_data(symbol, "1m", start_ts, end_ts)
+    print(len(res))
+    exit()
