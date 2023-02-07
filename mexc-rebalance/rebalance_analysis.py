@@ -14,6 +14,12 @@ class RebalanceAnalysis():
 
     def get_amnormal_rebalance_times(self):
         amnormal_rebalance_dict = {}
+        
+
+        if os.path.exists("data") == False:
+            os.mkdir("data")
+            self.mexc_client.get_mexc_rebalances()
+
         for file in os.listdir("data"):
             if "rebalance" in file:
                 rebal_list = self.get_recent_rebalance_json(file)
