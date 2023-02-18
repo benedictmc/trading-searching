@@ -8,6 +8,7 @@ import threading
 import websocket
 import pandas as pd
 import requests
+from retrieve_data import DataClient
 
 
 load_dotenv("../.env")
@@ -17,12 +18,18 @@ class MexcWSClient():
 
     def __init__(self):
  
-        client = pymongo.MongoClient(f"mongodb://{os.getenv('MONGODB_URI')}")
+        client = pymongo.MongoClient(os.getenv('AZURE_MONGODB_URI'))
         self.db = client["trading"]
         self.collection = self.db["mexc_raw"]
         self.message_list = deque([{"begining": int(time.time()) }])
         self.last_ping = int(time.time())
         self.save_index = 0
+
+
+    def start(self):
+        print("==================================")
+        print("Starting Mexc Data Collection")
+        print("==================================")
 
         # Start the websocket in a separate thread
         ws_thread = threading.Thread(target=self.start_websocket)

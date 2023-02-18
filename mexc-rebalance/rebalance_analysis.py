@@ -16,19 +16,17 @@ class RebalanceAnalysis():
     def __init__(self, start_ts, end_ts):
         self.mexc_client = MexcAPIClient()
         self.mongo_client = pymongo.MongoClient(f"mongodb://{os.getenv('LOCAL_MONGODB_URI')}")
+        self.data_client = DataClient()
+
         self.db = self.mongo_client["MEXC"]
         self.trade_client = TradeSimulation()
 
         self.start_ts = start_ts
         self.end_ts = end_ts
 
-        # self.find_15_percent_change()  
-        # self.create_15pct_df("OSMOUSDT")  
-
         for symbol in self.mexc_client.symbols: 
             df = self.create_15pct_df(symbol.replace("_", ""))[0]
             TradeSimulation(df).start()
-            # exit()
 
 
     def get_amnormal_rebalance_times(self, symbol=None, redownload=False):
@@ -89,140 +87,12 @@ class RebalanceAnalysis():
         return amnormal_rebalance_dict
 
 
-    # Legacy code
-    def find_15_percent_change(self):
-        amnormal_rebalance_dict = self.get_amnormal_rebalance_times()
-
-
-        for key, value in amnormal_rebalance_dict.items():
-            coin_pair = key.split("_")[0].replace("3S","").replace("3L","")
-            rebal_dt = pd.to_datetime(value['rebal_time'], unit='s').floor("min")
-
-
-            print("=====================================")
-            print(f"Checking {coin_pair}")
-            print(f"The time of the amnormal rebalance was: {pd.to_datetime(value['rebal_time'], unit='s')}")
-            print(f"The time of the previous rebalance was: {pd.to_datetime(value['last_rebal_time'], unit='s')}")
-
-            last_rebal_ms = value["last_rebal_time"]*1000
-            # last_rebal_ms plus one day
-            next_rebal_ms = last_rebal_ms + 86400000
-
-            res = self.mexc_client.get_kline_data(f"{coin_pair}USDT", "1m", last_rebal_ms, next_rebal_ms)
-
-            if type(res) == dict:
-                continue
-
-            rebalance_price = float(res[0][1])
-            max_pct_change = 0
-
-            ohlc_data, rebalance_signal, fifteen_signal = [], [], []
-            added_15 = False
-
-            for ohlc in res:
-                ohlc_dt = pd.to_datetime(ohlc[0], unit='ms')
-                ohlc_dict = {"ts": ohlc[0], "open": float(ohlc[1]), "high": float(ohlc[2]), "low": float(ohlc[3]), "close": float(ohlc[4])}
-                ohlc_data.append(ohlc_dict)
-
-                if ohlc_dt == rebal_dt:
-                    rebalance_signal.append(ohlc_dict["open"])
-                else:
-                    rebalance_signal.append(np.nan)
-
-                pct_change = (ohlc_dict["open"] - rebalance_price)/rebalance_price
-                
-                if pct_change > 0.15:
-                    added_15 = True
-                    print("Adding 15% marker")
-                    fifteen_signal.append(ohlc_dict["open"])
-                else:
-                    fifteen_signal.append(np.nan)
-
-            df = pd.DataFrame(ohlc_data)
-            df.set_index("ts", inplace=True)
-            df.index = pd.to_datetime(df.index, unit="ms")
-
-            df["rebalance_marker"] = rebalance_signal
-            df["fifteen_marker"] = fifteen_signal
-            
-            if not added_15:
-                continue
-            
-            marker_plots = [df.rebalance_marker.values]
-
-            # Check is list is all nan
-            if not all([math.isnan(x) for x in df.fifteen_marker.values]):
-                marker_plots.append(df.fifteen_marker.values)
-
-            chart_ohlc_data(df, marker_plots)
-
-
-    def get_price_data(self, start_ts, end_ts, interval = "1m", all_symbols = None, symbol = None):
-        if not all_symbols and not symbol:
-            raise Exception("Must specify all or symbol")
-
-        if all_symbols:
-            for symbol in self.mexc_client.symbols:
-                symbol = symbol.replace("_", "")
-                self._internal_get_price_data(start_ts, end_ts, interval, symbol)
-        else:
-            return self._internal_get_price_data(start_ts, end_ts, interval, symbol)
-
-
-    def _internal_get_price_data(self, start_ts, end_ts, interval, symbol):
-        try:
-            print("=====================================")
-            print(f"Getting data for {symbol}")
-            print("=====================================")
-
-            excepted_records = int((end_ts - start_ts) / self.mexc_client.interval_map[interval])
-
-            if symbol in self.db.list_collection_names():
-                db_fetch = self.db[f"{symbol}"].find({"timestamp": {"$gte": start_ts, "$lte": end_ts}}).sort("timestamp", 1)
-                result = [ _ for _ in db_fetch]
-
-                if len(result) == excepted_records:
-                    print("> All records already in db")
-                    return result
-                else:
-                    print("> Some records in DB. Retrieving new records...")
-                    db_start_ts = int(result[0]["timestamp"])
-                    db_end_ts = int(result[-1]["timestamp"])
-
-                    if start_ts != db_start_ts:
-                        end_ts = db_start_ts
-                        # Gets new records from new start_ts to start of db records
-                        result = self.mexc_client.get_kline_data(symbol, interval, start_ts, db_start_ts)
-                        print("> Inserting new records into db....")
-                        self.db[f"{symbol}"].insert_many(result, ordered=False)
-
-                    elif end_ts != db_end_ts:
-                        # Gets new records from end of db recordsstart_ts to new end_ts
-                        result = self.mexc_client.get_kline_data(symbol, interval, db_end_ts+self.mexc_client.interval_map[interval], end_ts)
-                        print("> Inserting new records into db....")
-                        self.db[f"{symbol}"].insert_many(result, ordered=False)
-                    
-            else:
-                print("> Retrieving new records....")
-                api_result = self.mexc_client.get_kline_data(symbol, interval, start_ts, end_ts)
-                print("> Inserting new records into db....")
-                self.db[f"{symbol}"].insert_many(api_result, ordered=False)
-
-            db_fetch = self.db[f"{symbol}"].find({"timestamp": {"$gte": start_ts, "$lte": end_ts}}).sort("timestamp", 1)
-            result = [ _ for _ in db_fetch]
-            return result
-        
-        except Exception as e:
-            print(f"Error getting data for {symbol}")
-            print(e)
-            
-    
     def create_15pct_df(self, symbol=None):
 
         if not symbol:
             raise Exception("Must specify symbol")
         
-        ohlc_data = self.get_price_data(self.start_ts, self.end_ts, symbol=symbol)
+        ohlc_data = self.data_client.get_price_data(self.start_ts, self.end_ts, symbol=symbol)
         print(f"Retrieved {len(ohlc_data)} records for {symbol}")
 
         # Drop the _id field and set the timestamp as the index
@@ -286,10 +156,6 @@ class RebalanceAnalysis():
 
     def plot_15pct_df(self, df, marker_plots):
         chart_ohlc_data(df, marker_plots)
-
-
-
-
 
 
 start_ts =  1672531200000
