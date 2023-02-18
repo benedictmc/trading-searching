@@ -1,10 +1,19 @@
+import pymongo
+from dotenv import load_dotenv
+from mexc_api_client import MexcAPIClient
+import os
+
+load_dotenv("../.env")
+
 
 class DataClient():
-
 
     def __init__(self, start_time, end_time):
         self.start_time = start_time
         self.end_time = end_time
+        mongo_client = pymongo.MongoClient(os.getenv('AZURE_MONGODB_URI'))
+        self.db = mongo_client["trading"]
+        self.mexc_client = MexcAPIClient()
 
 
     def get_price_data(self, start_ts, end_ts, interval = "1m", all_symbols = None, symbol = None):
@@ -65,3 +74,5 @@ class DataClient():
         except Exception as e:
             print(f"Error getting data for {symbol}")
             print(e)
+
+    

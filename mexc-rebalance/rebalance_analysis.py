@@ -1,10 +1,9 @@
 import json
 import os
 import pandas as pd
-from retrieve_mexc_data import MexcAPIClient
+from mexc_api_client import MexcAPIClient
 from chart_rebalance import chart_ohlc_data
 import numpy as np
-import pymongo
 from dotenv import load_dotenv
 import math
 from trade_simulation import TradeSimulation
@@ -15,10 +14,9 @@ class RebalanceAnalysis():
 
     def __init__(self, start_ts, end_ts):
         self.mexc_client = MexcAPIClient()
-        self.mongo_client = pymongo.MongoClient(f"mongodb://{os.getenv('LOCAL_MONGODB_URI')}")
-        self.data_client = DataClient()
+        
+        # self.data_client = DataClient()
 
-        self.db = self.mongo_client["MEXC"]
         self.trade_client = TradeSimulation()
 
         self.start_ts = start_ts
