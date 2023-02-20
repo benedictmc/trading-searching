@@ -2,6 +2,7 @@ import pymongo
 from dotenv import load_dotenv
 from mexc_api_client import MexcAPIClient
 import os
+import time
 
 load_dotenv("../.env")
 
@@ -76,3 +77,25 @@ class DataClient():
             print(e)
 
     
+    def get_futures_data(self, symbol, start_ts=None, end_ts=None):
+        print()
+
+        start_ts = 1676926426000
+        end_ts = 1676930026000
+        query = {"ts": {"$gt":start_ts, "$lt":end_ts}, "symbol": symbol}
+
+        if not start_ts and not end_ts:
+            print("> Using function defined start and end times")
+            start_ts = self.start_time
+            end_ts = self.end_time
+        
+        query_timing = int(time.time())
+        result = self.db["mexc_raw"].find(query)
+
+        for i in result:
+            print(i)
+
+        print(f"> Query took {int(time.time()) - query_timing} seconds")
+
+
+# DataClient(start_time=1676655774996, end_time=1676655774996).get_futures_data("STMX_USDT")
