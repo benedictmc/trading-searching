@@ -48,10 +48,6 @@ class TradeSimulation():
         print("==================================")
 
         
-
-            
-
-
     def buy(self, row, index):
         
         buy_ticket = {
