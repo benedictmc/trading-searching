@@ -78,7 +78,6 @@ class DataClient():
 
     
     def get_futures_data(self, symbol, start_ts=None, end_ts=None):
-        print()
 
         start_ts = 1676926426000
         end_ts = 1676930026000
@@ -97,5 +96,7 @@ class DataClient():
 
         print(f"> Query took {int(time.time()) - query_timing} seconds")
 
+    def get_rebalance_data(self):
+        self.mexc_client.get_mexc_rebalances()
 
-# DataClient(start_time=1676655774996, end_time=1676655774996).get_futures_data("STMX_USDT")
+DataClient(start_time=1676655774996, end_time=1676655774996).get_rebalance_data()
