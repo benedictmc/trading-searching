@@ -118,8 +118,8 @@ class MexcWSClient():
         print("Starting data saving thread")
         try:
             while True:
-                # Save every 20 minutes
-                time.sleep(60*60)
+                # Save every 60 minutes
+                time.sleep(60)
                 print("==================================")
                 print(f"Saving data at {int(time.time())}")
                 print("==================================")
@@ -145,9 +145,11 @@ class MexcWSClient():
                                 "M": message["data"]["M"],
                             })
 
-                        df_bytes = pd.DataFrame(message_list).to_csv(index=False).encode('utf-8')
+                        df_bytes = pd.DataFrame(format_message_list).to_csv(index=False).encode('utf-8')
                         df_stream = io.BytesIO(df_bytes)
-                        blob_client = self.blob_container.get_blob_client(f"{key}/mexc_orderbook_{int(time.time())}.csv")
+
+                        # Save blob to storage with millisecond timestamp
+                        blob_client = self.blob_container.get_blob_client(f"{key}/mexc_orderbook_{round(time.time() * 1000)}.csv")
                         blob_client.upload_blob(df_stream, overwrite=True)
                         print(f"Saved {list_len} {key} messages since last save")
 
@@ -202,7 +204,6 @@ class MexcWSClient():
                 content = self.blob_client.get_blob_client(self.container_name, blob.name).download_blob().readall().decode("utf-8")
                 blob_timestamp = int(blob.name.split("_")[-1].split(".")[0])
 
-                
                 if blob_timestamp <= last_timestamp:
                     # Blob is already in database
                     print("Blob already in database; Moving to archive", blob.name)
@@ -259,8 +260,6 @@ class MexcWSClient():
             conn.commit()
             conn.close()
 
-            # exit()
-
 
     def log_info(self):
         logger.info(f"Starting data logging thread at {int(time.time())}")
@@ -269,3 +268,7 @@ class MexcWSClient():
             logger.info(f"Message in the last minute: {self.message_count}")
             self.message_count = 0
             time.sleep(60)
+
+
+
+MexcWSClient().start()
