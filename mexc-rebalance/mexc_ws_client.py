@@ -38,7 +38,7 @@ class MexcWSClient():
 
         self.symbol_deque_map, self.symbol_ping_map = self._create_symbol_maps()
         self.last_ping = int(time.time())
-        self.ws_map = {}
+        self.ws_symbol_map, self.ws_thread_map = {}, {}
         self.message_count = 0
 
 
@@ -63,7 +63,6 @@ class MexcWSClient():
             ws_thread = threading.Thread(target=self.start_websocket, args=(symbol,))
             ws_thread.start()
 
-
         # Start the data saving thread
         save_thread = threading.Thread(target=self.save_message_list)
         save_thread.start()
@@ -80,25 +79,38 @@ class MexcWSClient():
         try:
             ws = websocket.WebSocketApp("wss://contract.mexc.com/ws", on_message=self.receive_messages, on_error=self.on_error, on_close=self.on_close )
             ws.on_open = lambda ws: ws.send(json.dumps({"method": "sub.deal", "param": {"symbol": symbol}}))
-            self.ws_map[str(ws)] = symbol
+            
+            self.ws_symbol_map[str(ws)] = symbol
+
+            self.ws_thread_map[str(ws)] = {
+                "symbol": symbol,   
+                "total_messages": 0,
+                "status": "running",
+                "error": []
+            }
+
             ping_thread = threading.Thread(target=self.ping, args=(ws,))
             ping_thread.start()
             ws.run_forever()
 
         except Exception as e:
             print("Websocket error. Restarting websocket")
-            logger.error(f"Websocket error. Restarting websocket, %s")
-            self.start_websocket(symbol)
+            logger.error(f"Websocket error. Restarting websocket, {e}")
 
     
     def on_error(self, ws, error):
-        print(f"Error occured: {error} on ws {self.ws_map[str(ws)]}")
-        logger.error(f"Error occured: {error} on ws {self.ws_map[str(ws)]}")
+        message = f"Error occured: {error} on ws {self.ws_symbol_map[str(ws)]}"
+        print(message)
+        logger.error(message)
+        self.ws_thread_map[str(ws)]["error"].append(message)
 
 
     def on_close(self, ws, close_status_code, close_msg):
-        print(f"Closed websocket: Status {close_status_code} {close_msg} on ws {self.ws_map[str(ws)]}")
-        logger.error(f"Closed websocket: Status {close_status_code} {close_msg} on ws {self.ws_map[str(ws)]}")
+        print(f"Closed websocket: Status {close_status_code} {close_msg} on ws {self.ws_symbol_map[str(ws)]}")
+        logger.error(f"Closed websocket: Status {close_status_code} {close_msg} on ws {self.ws_symbol_map[str(ws)]}")
+        self.ws_thread_map[str(ws)]["status"] = "closed"
+        ws_thread = threading.Thread(target=self.start_websocket, args=(self.ws_symbol_map[str(ws)],))
+        ws_thread.start()
 
 
     def ping(self, ws):
@@ -108,7 +120,8 @@ class MexcWSClient():
 
 
     def receive_messages(self, ws, message):
-        symbol = self.ws_map[str(ws)]
+        self.ws_thread_map[str(ws)]["total_messages"] += 1
+        symbol = self.ws_symbol_map[str(ws)]
         if message and "symbol" in message:
             self.message_count += 1
             self.symbol_deque_map[symbol].append(message)
@@ -118,8 +131,8 @@ class MexcWSClient():
         print("Starting data saving thread")
         try:
             while True:
-                # Save every 60 minutes
-                time.sleep(60)
+                # Save every 24 hours
+                time.sleep(60*60*24)
                 print("==================================")
                 print(f"Saving data at {int(time.time())}")
                 print("==================================")
@@ -151,7 +164,6 @@ class MexcWSClient():
                         # Save blob to storage with millisecond timestamp
                         blob_client = self.blob_container.get_blob_client(f"{key}/mexc_orderbook_{round(time.time() * 1000)}.csv")
                         blob_client.upload_blob(df_stream, overwrite=True)
-                        print(f"Saved {list_len} {key} messages since last save")
 
                     except Exception as e:
                         print(f"Execption occured: {e}")
@@ -199,26 +211,28 @@ class MexcWSClient():
 
             blob_list = self.blob_container.list_blobs(name_starts_with=f"{symbol}/")
             data_list = []
+            blobs_to_move = {} 
 
             for blob in blob_list:
                 content = self.blob_client.get_blob_client(self.container_name, blob.name).download_blob().readall().decode("utf-8")
                 blob_timestamp = int(blob.name.split("_")[-1].split(".")[0])
-
+                blobs_to_move[blob.name] = f"https://benslake.blob.core.windows.net/mexcorderbook/{blob.name}"
+                
                 if blob_timestamp <= last_timestamp:
                     # Blob is already in database
                     print("Blob already in database; Moving to archive", blob.name)
-                    blob_url = f"https://benslake.blob.core.windows.net/mexcorderbook/{blob.name}"
-                    destination_blob_name = blob.name
-                    self.blob_client.get_blob_client("orderbookarchive", destination_blob_name).start_copy_from_url(blob_url)
-                    self.blob_client.get_blob_client(self.container_name, blob.name).delete_blob()
+                    print("NOTE: This statement shouldn't be reached")
+                    logger.error("This statement shouldn't be reached. Blob already in database")
                 else:
                     # Blob needs to be added to database
                     content = content.split("\n")
 
                     for row in content[1:-1]:
                         data_list.append(tuple(row.split(",")))
-            
+
             if len(data_list) == 0:
+                print("No new data to add to database")
+                print("==================================")
                 continue
             else:
                 print("Data list length: ", len(data_list))
@@ -228,6 +242,15 @@ class MexcWSClient():
                 cursor.executemany(sql, data_list)
                 conn.commit()
                 conn.close()
+            
+            print(f"Moving {len(blobs_to_move)} blobs to archive")
+            # Move blobs to archive
+            for key, value in blobs_to_move.items():
+                self.blob_client.get_blob_client("orderbookarchive", key).start_copy_from_url(value)
+                self.blob_client.get_blob_client(self.container_name, key).delete_blob()
+
+            print("Done compiling symbol: ", symbol)
+            print("==================================")
 
 
     def get_rebalance_data(self):
@@ -236,9 +259,8 @@ class MexcWSClient():
         cursor.execute(f"SELECT id FROM rebalances")
         row = cursor.fetchall()
         ids = set([x[0] for x in row])
-
+        rebalance_list = []
         for symbol in self.channels:
-            rebalance_list = []
 
             symbol_rebalances = self.mexc_api_client.get_mexc_rebalances(symbol)
             for rebalance in symbol_rebalances:
@@ -252,22 +274,27 @@ class MexcWSClient():
             if len(rebalance_list) == 0:
                 continue
 
-            print(f"Attempting to add {len(rebalance_list)} rebalance data to database")
-            conn = pyodbc.connect(os.getenv('AZURE_SQL_URI'))
-            cursor = conn.cursor()
-            sql = f"INSERT INTO rebalances (id, rebalanceTime, etfCoin, basketBefore , basketAfter, delta, leveraged, rebalance) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
-            cursor.executemany(sql, rebalance_list)
-            conn.commit()
-            conn.close()
+        print(f"Attempting to add {len(rebalance_list)} rebalance data to database")
+        conn = pyodbc.connect(os.getenv('AZURE_SQL_URI'))
+        cursor = conn.cursor()
+        sql = f"INSERT INTO rebalances (id, rebalanceTime, etfCoin, basketBefore , basketAfter, delta, leveraged, rebalance) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
+        cursor.executemany(sql, rebalance_list)
+        conn.commit()
+        conn.close()
 
 
     def log_info(self):
+        print("==================================")
+        print(f"Starting data logging thread at {int(time.time())}")
+        print("==================================")
+
         logger.info(f"Starting data logging thread at {int(time.time())}")
 
         while True:
-            logger.info(f"Message in the last minute: {self.message_count}")
-            self.message_count = 0
-            time.sleep(60)
+            for _, ws_data in self.ws_thread_map.items():
+                logger.info(f">  WS for symbol {ws_data['symbol']} is {ws_data['status']}. There was been a total of {ws_data['total_messages']} messages on the socket")
+
+            time.sleep(60*10)
 
 
 
