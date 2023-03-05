@@ -85,11 +85,8 @@ class DataClient():
         conn = pyodbc.connect(os.getenv('AZURE_SQL_URI'))
         query = f"SELECT * FROM [dbo].[{symbol}_orderbook] where timestamp >= { start_ts } and timestamp < {end_ts} order by timestamp desc"
         df = pd.read_sql(query, conn)
-        print(len(df))
-        print(df.head(10))
-
-
         conn.close()
+        return df
 
 
 
@@ -104,8 +101,5 @@ class DataClient():
     
         conn = pyodbc.connect(os.getenv('AZURE_SQL_URI'))
         query = f"SELECT * FROM [dbo].[rebalances] where (etfCoin = '{ symbol }3S' or etfCoin = '{ symbol }3L' ) and rebalanceTime >= { start_ts } and rebalanceTime < {end_ts} order by rebalanceTime desc"
-        print(query)
         df = pd.read_sql(query, conn)
-        print(df)
-
-DataClient(start_time=1677715200000, end_time=1677801600000).get_rebalance_data("APE_USDT")
+        return df
