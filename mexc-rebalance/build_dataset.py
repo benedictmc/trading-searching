@@ -25,7 +25,7 @@ class DatasetBuilder():
 
             # Load existing dataset
             print("Loading existing dataset")
-            self.dataset = pd.read_csv(f"datasets/{self.file_name}")
+            self.dataset = pd.read_csv(f"datasets/{self.file_name}", index_col=0)
         else:
             # Build new dataset 
             print("Building new dataset")
@@ -62,43 +62,3 @@ class DatasetBuilder():
 
 
 ds = DatasetBuilder(start_time=1677715200000, end_time=1677801600000, symbol="APE_USDT")
-ds.build_dataset()
-# ds.save_dataset()
-# exit()
-data = {
-    'buy_price': [], 
-    'rebal': []
-}
-last_sell_price, last_buy_price = 5, 5
-
-for index, row in ds.dataset.iterrows():
-    data["buy_price"].append(row.price)
-
-    if row.rebal == True:
-        data["rebal"].append(row.price)
-    else:
-        data["rebal"].append(np.nan)
-
-    # if row["T"] == 1:
-    #     data["sell_price"].append(row.price)
-    #     last_sell_price = row.price
-    # else:
-    #     data["sell_price"].append(last_sell_price)
-
-    # if row["T"] == 2:
-    #     data["buy_price"].append(row.price)
-    #     last_buy_price = row.price
-    # else:
-    #     data["buy_price"].append(last_buy_price)
-
-
-df = pd.DataFrame(data, index=ds.dataset.index)
-
-# plot the price column against the time column
-ax = df.plot(y='buy_price', figsize=(10, 5))
-df.plot(y='rebal', ax=ax)
-
-plt.xlabel('Time')
-plt.ylabel('Price')
-plt.title('Price over Time')
-plt.savefig('foo.png')
