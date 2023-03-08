@@ -35,11 +35,9 @@ class DatasetBuilder():
 
     def __add_price_data(self):
         df = self.data_client.get_future_orderbook_data(self.symbol)
-        print(df.head())
 
         df.index = pd.to_datetime(df.timestamp, unit='ms')
         df = df.resample('1S').mean()
-        df = df.drop(columns=["timestamp"])
 
         self.dataset = pd.merge(self.dataset, df, left_index=True, right_index=True, how='left')
         self.dataset.price.fillna(method='ffill', inplace=True)
@@ -59,6 +57,3 @@ class DatasetBuilder():
 
     def save_dataset(self):
         self.dataset.to_csv(f"datasets/{self.file_name}")
-
-
-ds = DatasetBuilder(start_time=1677715200000, end_time=1677801600000, symbol="APE_USDT")
