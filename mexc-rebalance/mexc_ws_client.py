@@ -298,4 +298,4 @@ class MexcWSClient():
 
 
 
-MexcWSClient().start()
+MexcWSClient().get_rebalance_data()

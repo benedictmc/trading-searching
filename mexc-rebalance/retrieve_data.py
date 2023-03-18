@@ -75,25 +75,38 @@ class DataClient():
             print(e)
 
     
-    def get_future_orderbook_data(self, symbol, start_ts=None, end_ts=None):
+    def get_future_orderbook_data(self, symbol, exchange, start_ts=None, end_ts=None):
 
         if not start_ts and not end_ts:
-            print("> Using function defined start and end times")
+            print("> Using function defined start and end times for orderbook")
             start_ts = self.start_time
             end_ts = self.end_time
 
-        conn = pyodbc.connect(os.getenv('AZURE_SQL_URI'))
-        query = f"SELECT * FROM [dbo].[{symbol}_orderbook] where timestamp >= { start_ts } and timestamp < {end_ts} order by timestamp desc"
-        df = pd.read_sql(query, conn)
-        conn.close()
-        return df
+        if exchange not in ["mexc", "binance"]:
+            raise Exception("Exchange must be mexc or binance")
 
+        if exchange == "mexc":
+            conn = pyodbc.connect(os.getenv('AZURE_SQL_URI'))
+            query = f"SELECT * FROM [dbo].[{symbol}_orderbook] where timestamp >= { start_ts } and timestamp < {end_ts} order by timestamp desc"
+            df = pd.read_sql(query, conn)
+            conn.close()
+            df.rename(columns={"v": f"{symbol}_v", "price": f"{symbol}_price"}, inplace=True)
+            return df
+        
+        if exchange == "binance" and symbol == "BTC_USDT":
+            symbol = "BTCUSDT"
+            # Hack to get binance data; Should put in db first
+            df = pd.read_csv(f"data\BTCUSDT-trades-2023-03-02.csv")
+            df.drop(columns=["id", "is_buyer_maker", "quote_qty"], inplace=True)
+            df.rename(columns={"time": "timestamp", "qty": "BTC_USDT_v", "price": "BTC_USDT_price"}, inplace=True)
+
+            return df
 
 
     def get_rebalance_data(self, symbol, start_ts=None, end_ts=None):
     
         if not start_ts and not end_ts:
-            print("> Using function defined start and end times")
+            print("> Using function defined start and end times for rebalance")
             start_ts = self.start_time
             end_ts = self.end_time
 
@@ -103,3 +116,9 @@ class DataClient():
         query = f"SELECT * FROM [dbo].[rebalances] where (etfCoin = '{ symbol }3S' or etfCoin = '{ symbol }3L' ) and rebalanceTime >= { start_ts } and rebalanceTime < {end_ts} order by rebalanceTime desc"
         df = pd.read_sql(query, conn)
         return df
+
+
+
+
+
+
