@@ -18,13 +18,12 @@ class RetrieveDeltaData():
     def __init__(self):
         
         self.general_api = "https://api.delta.exchange/v2/"
-        client = pymongo.MongoClient(f"mongodb://{os.getenv('MONGODB_URI')}")
-        self.db = client["prediction_db"]
         self.period_map = {
+            "1m" : 60,
             "5m" : 300
         }
         self.move_skip_date = ["161222", "021222", "041122", "111122", "181122"]
-        self.strike_price = 17300
+        self.strike_price = 24600
 
 
     def get_delta_data(self, period: str, start_time: int, end_time: int, symbol: str) -> list:
@@ -74,101 +73,32 @@ class RetrieveDeltaData():
         return [_ for _ in collection.find(period_query, sort=[("time", 1)])]
 
 
-    def get_delta_move_data(self, period: str, start_time: int, end_time: int, symbol: str) -> list:
-        collection = self.db[f"move_data"]
-        date_list = []
-
-        if start_time > end_time:
-            print("Start time is greater than end time")
-            return 
-
-        days_to_iterate = int(end_time/86400) - int(start_time/86400)
-        move_timestamp = start_time
-        move_start_ts = 1000000000
-        move_end_ts = 4000000000
-
-        move_list = []
-
-        for _ in range(0, days_to_iterate):
-            date = datetime.utcfromtimestamp(move_timestamp).strftime('%d%m%y')
-            date_list.append(date)
-
-            if date in self.move_skip_date:
-                print(f"> *********")
-                print(f"> The date {date} has no data. Skipping....")
-                print(f"> *********")
-                move_timestamp += 86400
-                continue
-
-            period_query = {
-                "date" : date
-            }
-            document_count = collection.count_documents(period_query)
-
-            if document_count not in [286, 287, 288]:
-                print(f"Document count for day is incomplete. Documents {document_count}")
-                api_result, strike_price = self.__create_move_query(date, move_start_ts, move_end_ts, symbol)
-                print(f"Amount of results return from API {len(api_result)}")
-
-                # Remove last result becuase there will be duplicate
-                api_result.pop()
-                add_results = []
-
-                for _ in api_result:
-                    _.update({"_id":_["time"], "strike_price": strike_price, "date": date})
-                    add_results.append(_)
-
-                try:
-                    collection.insert_many(add_results, ordered=False)
-                except Exception as e:
-                    print(e)
-                    print(f"Insertion error documents inserted")
-            else:
-                print(f"All documents in DB for {date}. Retrieving....")
-
-            move_timestamp += 86400
-
-        all_period_query = {
-            "date" : {
-                "$in": date_list
-            }
-        }
-
-        move_list.extend([_ for _ in collection.find(filter=all_period_query, sort=[("time", 1)])])
-        return move_list
-
-
-    def __create_move_query(self, date, move_start_ts, move_end_ts, asset):
-        period = "5m"
-
-        api_result = False
-
-        for i in range(50):
-            upper_strike_price = self.strike_price + (i*100)
-            lower_strike_price = self.strike_price - (i*100)
-
-            upper_symbol = f"MV-{asset}-{upper_strike_price}-{date}"
-            upper_api_result = self.__get_future_api_data(period, move_start_ts, move_end_ts, upper_symbol)
-
-            if len(upper_api_result["result"]) != 0:
-                self.strike_price = upper_strike_price
-                api_result = upper_api_result
-                break
-            
-            lower_symbol = f"MV-{asset}-{lower_strike_price}-{date}"
-            lower_api_result = self.__get_future_api_data(period, move_start_ts, move_end_ts, lower_symbol)
-
-            if len(lower_api_result["result"]) != 0:
-                self.strike_price = lower_strike_price
-                api_result = lower_api_result
-                break
+    def get_delta_move_data(self, period: str, coin: str, start_date: int, end_date: int) -> list:
         
-        if not api_result:
-            print(f"Strike price not found for {date}")
-            return [], 0
+        with open("data/move_contract_meta.json", "r") as f:
+            contract_meta = json.load(f)
 
-        return api_result["result"], self.strike_price
-    
+        start_datetime, end_datetime = pd.to_datetime(start_date, unit='s'), pd.to_datetime(end_date, unit='s')
+        settlement_dates = pd.date_range(start_datetime, end_datetime).strftime("%Y-%m-%d").tolist()
+        ohlc_data = []
+
+        for settlement_date in settlement_dates:
+            
+            if contract_meta[settlement_date][coin]:
+                # Just getting first move contract for now
+                symbol = contract_meta[settlement_date][coin][0]
+
+            # Settlement_date to timestamp
+            date = datetime.strptime(settlement_date, "%Y-%m-%d")
+
+            start_time = int(date.timestamp()) - (60*60*28)
+            end_time = int(date.timestamp()) + (60*60*28)
+        
+            day_ohlc_data = self.__get_future_api_data(period, start_time, end_time, symbol)
+            ohlc_data.extend(day_ohlc_data)
+
+        return ohlc_data
+
 
     def __get_future_api_data(self, period: str, start_time: int, end_time: int, symbol: str) -> dict:
         self.api_url = "history/candles"
@@ -179,7 +109,7 @@ class RetrieveDeltaData():
             print("********")
             print("Error")
 
-        return response.json()
+        return response.json()["result"]
 
 
     def delta_websocket(self):
@@ -232,5 +162,39 @@ class RetrieveDeltaData():
         asyncio.get_event_loop().run_until_complete(run_client())
 
 
+    def get_move_contract_metadata(self):
+        self.api_url = "products"
+        request_url = f"{self.general_api}{self.api_url}?contract_types=move_options&states=expired"
+        print(f"Getting data for Delta with request: {request_url}")
+        response = requests.get(request_url)
+        if response.status_code != 200:
+            print("********")
+            print("Error")
 
-# RetrieveDeltaData().delta_websocket()
+        result = response.json()
+
+        with open("data/move_contract_meta.json", "r") as f:
+            contract_metadata = json.load(f)
+
+        for contract in result["result"]:
+            settlement_time = contract["settlement_time"]
+            settlement_date = str(pd.to_datetime(settlement_time).date())
+            coin = contract["contract_unit_currency"]
+            symbol = contract["symbol"]
+
+            print(f"Coin: {coin}, Symbol: {symbol}, Settlement Date: {settlement_date}")
+
+            if contract_metadata.get(settlement_date) and contract_metadata.get(settlement_date).get(coin) and symbol in contract_metadata[settlement_date][coin]:
+                continue
+            
+            if contract_metadata.get(settlement_date) and contract_metadata.get(settlement_date).get(coin):
+                contract_metadata[settlement_date][coin].append(symbol)
+
+            elif contract_metadata.get(settlement_date):
+                contract_metadata[settlement_date][coin] = [symbol]
+
+            else:
+                contract_metadata[settlement_date] = {coin: [symbol]}
+
+        with open("data/move_contract_meta.json", "w") as f:
+            json.dump(contract_metadata, f)
