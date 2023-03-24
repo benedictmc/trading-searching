@@ -5,7 +5,6 @@ from download_data import RetrieveDeltaData
 class DeltaDataset():
 
     def __init__(self, start_date: str, end_date: str):
-
         # Sets up variables for dataset
         self.__setup_variables(start_date, end_date)
         self.delta_client = RetrieveDeltaData()
@@ -18,15 +17,15 @@ class DeltaDataset():
         # move_start_ts = int(self.move_df.index[0].timestamp())
         # move_end_ts = int(self.move_df.index[-1].timestamp()) + 5*60
         # self.futures_df = self.__get_future_data(move_start_ts, move_end_ts)
-
-        self.df = self.move_df.merge(self.futures_df, left_index=True, right_index=True, how='inner')
+        self.df = self.move_df
+        # self.df = self.move_df.merge(self.futures_df, left_index=True, right_index=True, how='inner')
 
 
     def __setup_variables(self, start_date: str, end_date: str):
         self.start_time = start_date
         self.end_time = end_date
         self.coin = "BTC"
-        self.period = "1m"
+        self.period = "5m"
 
 
     # Takes int timestamps

@@ -91,13 +91,13 @@ class RetrieveDeltaData():
             # Settlement_date to timestamp
             date = datetime.strptime(settlement_date, "%Y-%m-%d")
 
-            start_time = int(date.timestamp()) - (60*60*28)
-            end_time = int(date.timestamp()) + (60*60*28)
+            start_time = int(date.timestamp()) - (60*60*24*2)
+            end_time = int(date.timestamp()) + (60*60*24*2)
         
             day_ohlc_data = self.__get_future_api_data(period, start_time, end_time, symbol)
             ohlc_data.extend(day_ohlc_data)
 
-        return ohlc_data
+        return ohlc_data[::-1]
 
 
     def __get_future_api_data(self, period: str, start_time: int, end_time: int, symbol: str) -> dict:

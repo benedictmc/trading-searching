@@ -14,11 +14,11 @@ def chart_Ohlc_data(df, move=None):
     #     # mpf.make_addplot(df[''],color='g',panel=1), 
     # ]
     # mpf.plot(df,type='candle', main_panel=0, addplot=ap2)
-
+    print
     mpf.plot(df,type='candle', main_panel=0)
 
 
-dataset = DeltaDataset(start_date='2023-03-15', end_date='2023-01-16')
+dataset = DeltaDataset(start_date='2023-03-20', end_date='2023-03-20')
 dataset.build()
 df = dataset.df
 print(df.head())
