@@ -89,9 +89,9 @@ class BinanceDataset():
         df['EMA_long'] = ta.trend.EMAIndicator(df[close_col], window=60).ema_indicator()
 
         # # Weighted Moving Averages
-        # df['WMA_short'] = ta.trend.WMAIndicator(df[close_col], window=5).wma()
-        # df['WMA_medium'] = ta.trend.WMAIndicator(df[close_col], window=30).wma()
-        # df['WMA_long'] = ta.trend.WMAIndicator(df[close_col], window=60).wma()
+        df['WMA_short'] = ta.trend.WMAIndicator(df[close_col], window=5).wma()
+        df['WMA_medium'] = ta.trend.WMAIndicator(df[close_col], window=30).wma()
+        df['WMA_long'] = ta.trend.WMAIndicator(df[close_col], window=60).wma()
         return df
 
     # Creates the target variable
@@ -99,7 +99,9 @@ class BinanceDataset():
     def create_target_variable(self, df):
         # Price change in 5 minutes 
         df['price_change'] = df.price.pct_change(periods=300).shift(-300)
-        # 1 if price goes up 1% or more, -1 if price goes down 1% or more, 0 if price stays the same
-        df['price_direction'] = self.dataset.price_change.apply(lambda x: 1 if x >= 0.01 else (-1 if x <= -0.01 else 0))
 
-        return df['price_direction']
+
+        # 1 if price goes up 1% or more, -1 if price goes down 1% or more, 0 if price stays the same
+        df['target_variable'] = self.dataset.price_change.apply(lambda x: 1 if x >= 0.01 else (-1 if x <= -0.01 else 0))
+        df.drop(columns=["price_change"],  inplace=True)
+        return df['target_variable']
