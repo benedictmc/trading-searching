@@ -1,7 +1,7 @@
 from build_dataset import BinanceDataset
 import matplotlib.pyplot as plt
 
-bds = BinanceDataset(start_date='2023-03-12', end_date='2023-03-12', symbol='MAGICUSDT')
+bds = BinanceDataset(start_date='2023-03-13', end_date='2023-03-13', symbol='MAGICUSDT')
 bds.build()
 bds.save_dataset()
 
